@@ -6,13 +6,13 @@ import (
 
 // Helper function to create a team and return its ID
 func createTeam(ts *TeamSystem, playerID uint64) uint64 {
-	params := CreateTeamParam{LeaderID: playerID, MemberList: []uint64{playerID}}
+	params := NewCreateTeamParam(playerID, []uint64{playerID})
 	ts.CreateTeam(params)
 	return ts.LastTeamID()
 }
 
 func TestCreateFullDismiss(t *testing.T) {
-	ts := &TeamSystem{}
+	ts := NewTeamSystem()
 	teamIDs := make([]uint64, 0, kMaxTeamSize)
 	playerID := uint64(1)
 
@@ -51,10 +51,10 @@ func TestCreateFullDismiss(t *testing.T) {
 }
 
 func TestTeamSize(t *testing.T) {
-	ts := &TeamSystem{}
+	ts := NewTeamSystem()
 	memberID := uint64(100)
 
-	if got := ts.CreateTeam(CreateTeamParam{LeaderID: memberID, MemberList: []uint64{memberID}}); got != kOK {
+	if got := ts.CreateTeam(NewCreateTeamParam(memberID, []uint64{memberID})); got != kOK {
 		t.Errorf("CreateTeam() = %v, want %v", got, kOK)
 	}
 	if !ts.HasMember(ts.LastTeamID(), memberID) {
@@ -87,10 +87,10 @@ func TestTeamSize(t *testing.T) {
 }
 
 func TestLeaveTeam(t *testing.T) {
-	ts := &TeamSystem{}
+	ts := NewTeamSystem()
 	memberID := uint64(100)
 
-	if got := ts.CreateTeam(CreateTeamParam{LeaderID: memberID, MemberList: []uint64{memberID}}); got != kOK {
+	if got := ts.CreateTeam(NewCreateTeamParam(memberID, []uint64{memberID})); got != kOK {
 		t.Errorf("CreateTeam() = %v, want %v", got, kOK)
 	}
 	if !ts.HasMember(ts.LastTeamID(), memberID) {
@@ -117,7 +117,7 @@ func TestLeaveTeam(t *testing.T) {
 		t.Errorf("MemberSize() = %v, want %v", got, 0)
 	}
 
-	if got := ts.CreateTeam(CreateTeamParam{LeaderID: memberID, MemberList: []uint64{memberID}}); got != kOK {
+	if got := ts.CreateTeam(NewCreateTeamParam(memberID, []uint64{memberID})); got != kOK {
 		t.Errorf("CreateTeam() = %v, want %v", got, kOK)
 	}
 

@@ -12,29 +12,29 @@ const (
 )
 
 const (
-	kOK                            = 0
-	kRetTeamNotInApplicants        = 5000
-	kRetTeamPlayerId               = 5001
-	kTeamMembersFull               = 5002
-	kTeamMemberInTeam              = 5003
-	kTeamMemberNotInTeam           = 5004
-	kTeamKickSelf                  = 5005
-	kTeamKickNotLeader             = 5006
-	kRetTeamAppointSelf            = 5007
-	kRetTeamAppointLeaderNotLeader = 5008
-	kRetTeamFull                   = 5009
-	kRetTeamInApplicantList        = 5010
-	kRetTeamNotInApplicantList     = 5011
-	kTeamListMaxSize               = 5012
-	kTeamHasNotTeamId              = 5013
-	kTeamDismissNotLeader          = 5014
-	kTeamJoinTeamMemberListToMax   = 5015
-	kTeamCreateTeamMaxMemberSize   = 5016
-	kRetTeamPlayerNotFound         = 5017
-	kTeamApplyExist                = 5018
-	kTeamAppointNotLeader          = 5019
-	kTeamApplyJoin                 = 5020
-	kTeamApplyListFull             = 5021
+	kOK                          = 0
+	kTeamNotInApplicants         = 5000
+	kTeamPlayerId                = 5001
+	kTeamMembersFull             = 5002
+	kTeamMemberInTeam            = 5003
+	kTeamMemberNotInTeam         = 5004
+	kTeamKickSelf                = 5005
+	kTeamKickNotLeader           = 5006
+	kTeamAppointSelf             = 5007
+	kTeamAppointLeaderNotLeader  = 5008
+	kTeamFull                    = 5009
+	kTeamInApplicantList         = 5010
+	kTeamNotInApplicantList      = 5011
+	kTeamListMaxSize             = 5012
+	kTeamHasNotTeamId            = 5013
+	kTeamDismissNotLeader        = 5014
+	kTeamJoinTeamMemberListToMax = 5015
+	kTeamCreateTeamMaxMemberSize = 5016
+	kTeamPlayerNotFound          = 5017
+	kTeamApplyExist              = 5018
+	kTeamAppointNotLeader        = 5019
+	kTeamApplyJoin               = 5020
+	kTeamApplyListFull           = 5021
 )
 
 // GuidVector is a slice of Guid (uint64)
@@ -50,8 +50,8 @@ type CreateTeamParam struct {
 // Team represents a team entity
 type Team struct {
 	LeaderID     uint64
-	TeamID       uint64 // Assuming TeamID is uint64
-	Members      GuidVector
+	ID           uint64 // Assuming ID is uint64
+	MemberList   GuidVector
 	Applicants   GuidVector
 	TeamTypeSize uint64
 }
@@ -61,6 +61,20 @@ type TeamSystem struct {
 	teams       map[uint64]*Team // Map of team ID to Team
 	playerLists sync.Map         // Map of player ID to team ID
 	lastTeamID  uint64           // For testing
+}
+
+func NewCreateTeamParam(leaderID uint64, members []uint64, teamTypeSize ...uint64) CreateTeamParam {
+	// Default TeamTypeSize is 5
+	size := uint64(5)
+	if len(teamTypeSize) > 0 {
+		size = teamTypeSize[0]
+	}
+
+	return CreateTeamParam{
+		LeaderID:     leaderID,
+		MemberList:   members,
+		TeamTypeSize: size,
+	}
 }
 
 // NewTeamSystem initializes a new TeamSystem
@@ -86,7 +100,7 @@ func (ts *TeamSystem) IsTeamListMax() bool {
 
 func (ts *TeamSystem) MemberSize(teamID uint64) int {
 	if team, ok := ts.teams[teamID]; ok {
-		return len(team.Members)
+		return len(team.MemberList)
 	}
 	return 0
 }
@@ -140,14 +154,14 @@ func (ts *TeamSystem) FirstApplicant(teamID uint64) uint64 {
 
 func (ts *TeamSystem) IsTeamFull(teamID uint64) bool {
 	if team, ok := ts.teams[teamID]; ok {
-		return len(team.Members) >= int(team.TeamTypeSize)
+		return len(team.MemberList) >= int(team.TeamTypeSize)
 	}
 	return false
 }
 
 func (ts *TeamSystem) HasMember(teamID, guid uint64) bool {
 	if team, ok := ts.teams[teamID]; ok {
-		for _, member := range team.Members {
+		for _, member := range team.MemberList {
 			if member == guid {
 				return true
 			}
@@ -190,12 +204,12 @@ func (ts *TeamSystem) CreateTeam(param CreateTeamParam) uint32 {
 
 	team := &Team{
 		LeaderID:     param.LeaderID,
-		TeamID:       teamID,
-		Members:      make(GuidVector, len(param.MemberList)),
+		ID:           teamID,
+		MemberList:   make(GuidVector, len(param.MemberList)),
 		Applicants:   make(GuidVector, 0),
 		TeamTypeSize: param.TeamTypeSize,
 	}
-	copy(team.Members, param.MemberList)
+	copy(team.MemberList, param.MemberList)
 	ts.teams[teamID] = team
 
 	for _, member := range param.MemberList {
@@ -216,7 +230,7 @@ func (ts *TeamSystem) JoinTeam(teamID, guid uint64) uint32 {
 		if idx := ts.FindApplicantIndex(team, guid); idx != -1 {
 			team.Applicants = append(team.Applicants[:idx], team.Applicants[idx+1:]...)
 		}
-		team.Members = append(team.Members, guid)
+		team.MemberList = append(team.MemberList, guid)
 		ts.playerLists.Store(guid, teamID)
 		return kOK
 	}
@@ -225,7 +239,7 @@ func (ts *TeamSystem) JoinTeam(teamID, guid uint64) uint32 {
 
 func (ts *TeamSystem) JoinTeamByMemberList(memberList GuidVector, teamID uint64) uint32 {
 	if team, ok := ts.teams[teamID]; ok {
-		if len(team.Members)+len(memberList) > int(team.TeamTypeSize) {
+		if len(team.MemberList)+len(memberList) > int(team.TeamTypeSize) {
 			return kTeamJoinTeamMemberListToMax
 		}
 		if err := ts.CheckMemberInTeam(memberList); err != kOK {
@@ -258,10 +272,10 @@ func (ts *TeamSystem) LeaveTeam(guid uint64) uint32 {
 		}
 		isLeaderLeave := team.LeaderID == guid
 		ts.DelMember(teamID, guid)
-		if len(team.Members) > 0 && isLeaderLeave {
-			ts.OnAppointLeader(teamID, team.Members[0])
+		if len(team.MemberList) > 0 && isLeaderLeave {
+			ts.OnAppointLeader(teamID, team.MemberList[0])
 		}
-		if len(team.Members) == 0 {
+		if len(team.MemberList) == 0 {
 			ts.EraseTeam(teamID)
 		}
 		return kOK
@@ -291,7 +305,7 @@ func (ts *TeamSystem) Disbanded(teamID, currentLeaderID uint64) uint32 {
 		if team.LeaderID != currentLeaderID {
 			return kTeamDismissNotLeader
 		}
-		for _, member := range team.Members {
+		for _, member := range team.MemberList {
 			ts.DelMember(teamID, member)
 		}
 		ts.EraseTeam(teamID)
@@ -363,7 +377,7 @@ func (ts *TeamSystem) ClearApplyList(teamID uint64) uint32 {
 
 func (ts *TeamSystem) EraseTeam(teamID uint64) {
 	if team, ok := ts.teams[teamID]; ok {
-		for _, member := range team.Members {
+		for _, member := range team.MemberList {
 			ts.playerLists.Delete(member)
 		}
 		delete(ts.teams, teamID)
@@ -372,9 +386,9 @@ func (ts *TeamSystem) EraseTeam(teamID uint64) {
 
 func (ts *TeamSystem) DelMember(teamID, guid uint64) {
 	if team, ok := ts.teams[teamID]; ok {
-		for idx, member := range team.Members {
+		for idx, member := range team.MemberList {
 			if member == guid {
-				team.Members = append(team.Members[:idx], team.Members[idx+1:]...)
+				team.MemberList = append(team.MemberList[:idx], team.MemberList[idx+1:]...)
 				ts.playerLists.Delete(guid)
 				return
 			}
