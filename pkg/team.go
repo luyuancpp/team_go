@@ -323,6 +323,9 @@ func (ts *TeamSystem) DisbandedTeamNoLeader(teamID uint64) uint32 {
 
 func (ts *TeamSystem) AppointLeader(teamID, currentLeaderID, newLeaderID uint64) uint32 {
 	if team, ok := ts.teams[teamID]; ok {
+		if team.LeaderID == newLeaderID {
+			return kTeamAppointSelf
+		}
 		if team.LeaderID != currentLeaderID {
 			return kTeamAppointNotLeader
 		}
@@ -336,23 +339,40 @@ func (ts *TeamSystem) AppointLeader(teamID, currentLeaderID, newLeaderID uint64)
 }
 
 func (ts *TeamSystem) ApplyToTeam(teamID, guid uint64) uint32 {
-	if team, ok := ts.teams[teamID]; ok {
-		if ts.HasTeam(guid) {
-			return kTeamMemberInTeam
-		}
-		if ts.HasMember(teamID, guid) {
-			return kTeamApplyExist
-		}
-		if ts.IsApplicant(teamID, guid) {
-			return kTeamApplyJoin
-		}
-		if len(team.Applicants) >= kMaxApplicantSize {
-			return kTeamApplyListFull
-		}
-		team.Applicants = append(team.Applicants, guid)
-		return kOK
+	team, ok := ts.teams[teamID]
+	if !ok {
+		// Team with teamID does not exist
+		return kTeamHasNotTeamId
 	}
-	return kTeamHasNotTeamId
+
+	// Check if the user is already in a team
+	if ts.HasTeam(guid) {
+		return kTeamMemberInTeam
+	}
+
+	// Check if the user is already a member of the team
+	if ts.HasMember(teamID, guid) {
+		return kTeamApplyExist
+	}
+
+	if ts.IsTeamFull(teamID) {
+		return kTeamMembersFull
+	}
+
+	// Check if the user is already an applicant
+	if ts.IsApplicant(teamID, guid) {
+		return kTeamApplyJoin
+	}
+
+	// If the applicants list is full, remove the oldest applicant
+	if len(team.Applicants) >= kMaxApplicantSize {
+		// Remove the first applicant from the list
+		team.Applicants = team.Applicants[1:]
+	}
+
+	// Add the user to the applicant list
+	team.Applicants = append(team.Applicants, guid)
+	return kOK
 }
 
 func (ts *TeamSystem) DelApplicant(teamID, guid uint64) uint32 {
