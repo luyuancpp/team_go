@@ -187,21 +187,29 @@ func (ts *TeamSystem) IsApplicant(teamID, guid uint64) bool {
 }
 
 func (ts *TeamSystem) CreateTeam(param CreateTeamParam) uint32 {
+	// Check if the team list has reached its maximum size
 	if ts.IsTeamListMax() {
 		return kTeamListMaxSize
 	}
+
+	// Check if the leader is already in a team
 	if ts.HasTeam(param.LeaderID) {
 		return kTeamMemberInTeam
 	}
+
+	// Validate the number of members and check if all members are valid
 	if len(param.MemberList) > int(param.TeamTypeSize) {
 		return kTeamCreateTeamMaxMemberSize
 	}
 	if err := ts.CheckMemberInTeam(param.MemberList); err != kOK {
 		return err
 	}
+
+	// Create a new team with a new ID
 	teamID := ts.lastTeamID + 1
 	ts.lastTeamID = teamID
 
+	// Initialize the new team
 	team := &Team{
 		LeaderID:     param.LeaderID,
 		ID:           teamID,
@@ -212,6 +220,7 @@ func (ts *TeamSystem) CreateTeam(param CreateTeamParam) uint32 {
 	copy(team.MemberList, param.MemberList)
 	ts.teams[teamID] = team
 
+	// Update player to team mappings
 	for _, member := range param.MemberList {
 		ts.playerLists.Store(member, teamID)
 	}
